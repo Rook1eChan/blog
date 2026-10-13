@@ -46,6 +46,37 @@ summary: "一句话摘要，会显示在列表页。"
 正文……
 ```
 
+## 发布更新
+
+改完内容后，在项目根目录运行一条命令即可发布：
+
+```bash
+./update.sh                  # 提交信息自动带时间戳
+./update.sh "新增文章：xxx"   # 自定义提交信息
+```
+
+它依次做三件事：
+
+1. **本地构建** —— 构建失败立即中止，不会推送半成品
+2. **提交改动** —— `git add -A` + commit（没有改动就跳过）
+3. **推送** —— 之后 GitHub Actions 自动构建并部署到 Pages（约 1 分钟）
+
+脚本不写死任何路径（靠自身所在位置定位项目根目录，也支持软链接调用），
+也不含任何凭据 —— 推送用的是本机的 git 凭据。
+
+想直接敲 `update` 而不用 `./update.sh`（可选，本机专属）：
+
+```bash
+ln -sf "$PWD/update.sh" /usr/local/bin/update
+```
+
+首次使用需配置一次凭据（之后免密）：
+
+```bash
+git config credential.helper store
+git push     # 交互式输入：Username 填 GitHub 用户名，Password 粘贴 token
+```
+
 ## 部署
 
 推送到 `main` 分支后，GitHub Actions 会自动构建并发布到 GitHub Pages。
