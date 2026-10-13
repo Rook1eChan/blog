@@ -171,10 +171,12 @@ blockquote                      { font-style: italic; }
 /* code formatting.  no monospace because of webkit (bug?) */
 pre, code, tt   { font-family: 'JetBrains Mono', 'Consolas', 'Deja Vu Sans Mono',
                   'Bitstream Vera Sans Mono', 'Monaco', 'Courier New', monospace;
-                  font-size: 0.9em; }
+                  font-size: 0.8em; }
+/* 代码块与正文左右对齐（原来 margin 左右 -30px 会满血出血、移动端还会横向溢出） */
 pre             { line-height: 1.5; background: var(--code-block-background-color);
-                  color: var(--code-block-text-color); padding: 8px 30px; width: 100%; overflow-x: auto;
-                  margin: -8px -30px -8px -30px; border-radius: 2px; box-shadow: 0 0 3px var(--pre-shadow); }
+                  color: var(--code-block-text-color); padding: 8px 14px; box-sizing: border-box;
+                  overflow-x: auto; margin: -8px 0 -8px 0; border-radius: 2px;
+                  box-shadow: 0 0 3px var(--pre-shadow); }
 /* consecutive code blocks: the negative margins would collapse and let the
    boxes touch, so space them apart (23px - 8px leaves a 15px gap) */
 pre + pre,
