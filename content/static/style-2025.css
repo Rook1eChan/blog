@@ -74,9 +74,7 @@
 
 /* general style */
 html    { background: var(--background-color); }
-body    { font: 17px/25px 'Merriweather', 'Songti SC', 'STSong',
-          'Noto Serif CJK SC', 'Source Han Serif SC', 'Noto Serif SC',
-          'SimSun', serif;
+body    { font: 17px/25px 'Lora', 'Noto Serif SC', serif;
           margin: 0; padding: 0; font-weight: 400; color: var(--text-color);
           min-height: 100vh; display: flex; flex-direction: column; }
 a       { color: var(--primary-color); font-weight: 400; }
@@ -119,10 +117,8 @@ p.theme-selector {
 }
 
 /* headlines */
-h1, h2, h3, h4, h5, h6      { font-family: 'Lora', 'Songti SC', 'STSong',
-                              'Noto Serif CJK SC', 'Source Han Serif SC',
-                              'Noto Serif SC', 'SimSun', serif;
-                              font-weight: 500; color: var(--header-color) }
+h1, h2, h3, h4, h5, h6      { font-family: 'Playfair Display', 'Noto Serif SC', serif;
+                              font-weight: 700; color: var(--header-color) }
 h1 a, h2 a, h3 a, h4 a,
 h5 a, h6 a                  { text-decoration: none; }
 h1 a:hover, h2 a:hover,
@@ -170,7 +166,7 @@ h1 + p.date                     { margin-top: -25px; font-style: italic; }
 blockquote                      { font-style: italic; }
 
 /* code formatting.  no monospace because of webkit (bug?) */
-pre, code, tt   { font-family: 'Ubuntu Mono', 'Consolas', 'Deja Vu Sans Mono',
+pre, code, tt   { font-family: 'JetBrains Mono', 'Consolas', 'Deja Vu Sans Mono',
                   'Bitstream Vera Sans Mono', 'Monaco', 'Courier New', monospace;
                   font-size: 0.9em; }
 pre             { line-height: 1.5; background: var(--code-block-background-color);
@@ -199,9 +195,7 @@ div.entry-overview h1,
 div.entry-overview div.summary,
 div.entry-overview div.summary p    { display: inline; line-height: 25px; }
 div.entry-overview h1               { margin: 0; font-size: 17px;
-                                      font-family: 'Merriweather', 'Songti SC', 'STSong',
-                                      'Noto Serif CJK SC', 'Source Han Serif SC',
-                                      'Noto Serif SC', 'SimSun', serif; }
+                                      font-family: 'Lora', 'Noto Serif SC', serif; }
 div.entry-overview h1:after         { content: " —"; color: var(--text-color); }
 div.entry-overview div.summary,
 div.entry-overview div.date,
