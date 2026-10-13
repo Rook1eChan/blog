@@ -1,0 +1,14 @@
+{% extends "blog/archive.html" %}
+{% block title %}{{ entry.month_name }} {{ entry.year }} 归档{% endblock %}
+{% block archive_title %}
+  <h1>归档 <a href="{{ link_to('blog_archive') }}">全部</a> ·
+    <a href="{{ link_to('blog_archive', year=entry.year) }}">{{ entry.year }}</a> 年 {{ entry.month_name }}</h1>
+{% endblock %}
+{% block archive_body %}
+  <ul class=blog-archive>
+    {%- for item in entry.entries %}
+      <li><a href="{{ link_to('page', slug=item.slug) }}">{{ item.title }}</a>
+        {%- if item.pub_date %}, {{ format_date(item.pub_date, format='long') }}{% endif %}
+    {%- endfor %}
+  </ul>
+{% endblock %}

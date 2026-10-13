@@ -1,9 +1,12 @@
 ---
-tags: ['随笔']
 summary: "关于我和这个博客。"
 ---
 
 # 关于我 · About
+
+<div style="float: right; margin-left: 20px; margin-bottom: 20px;">
+    <img src="/static/avatar-large.jpg" alt="头像" width="150" height="150" />
+</div>
 
 你好，我是 **Rook1eChan**。这里记录我在机器学习、信息检索、RAG
 以及日常学习中的想法。

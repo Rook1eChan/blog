@@ -1,14 +1,67 @@
 {% extends "layout.html" %}
-{% block title %}标签 {{ tag.name }} | {{ config.site_title }}{% endblock %}
+{% block title %}标签 "{{ tag.name }}"{% endblock %}
 {% block body %}
-<h1>标签 <a href="{{ link_to('tagcloud') }}">#{{ tag.name }}</a></h1>
-<p class="archive-hint">{{ tag.count }} 篇</p>
-<ul class="post-archive">
-  {% for entry in entries %}
-  <li>
-    <span class="archive-date">{{ format_date(entry.pub_date, format='medium') }}</span>
-    <a href="{{ link_to('page', slug=entry.slug) }}">{{ entry.title }}</a>
-  </li>
-  {% endfor %}
-</ul>
+  <h1>标签 <a href="{{ link_to('tagcloud') }}">#{{ tag.name }}</a></h1>
+  <div class="tag-sort-controls">
+    <p>排序方式：
+      <label><input type="radio" name="sort" value="title" checked> <span>标题</span></label>、
+      <label><input type="radio" name="sort" value="date"> <span>发布日期</span></label>
+  </div>
+  <ul id="tag-entries">
+  {%- for entry in entries %}
+    <li data-idx="{{ loop.index0 }}" data-date="{{ entry.pub_date.isoformat() if entry.pub_date else '' }}">
+      <a href="{{ link_to('page', slug=entry.slug) }}">{{ entry.title }}</a>
+      {%- if entry.pub_date %}，写于 {{ format_date(entry.pub_date, format='long') }}{% endif %}
+    </li>
+  {%- endfor %}
+  </ul>
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const sortControls = document.querySelectorAll('input[name="sort"]');
+      const entriesList = document.getElementById('tag-entries');
+      const storageKey = 'tag-sort-preference';
+
+      function sortEntries(sortBy) {
+        const entries = Array.from(entriesList.children);
+
+        entries.sort(function(a, b) {
+          if (sortBy === 'title') {
+            const idxA = parseInt(a.dataset.idx);
+            const idxB = parseInt(b.dataset.idx);
+            return idxA - idxB;
+          } else if (sortBy === 'date') {
+            const dateA = a.dataset.date || '';
+            const dateB = b.dataset.date || '';
+            return dateB.localeCompare(dateA);
+          }
+          return 0;
+        });
+
+        entries.forEach(function(entry) {
+          entriesList.appendChild(entry);
+        });
+      }
+
+      const savedSort = localStorage.getItem(storageKey);
+      if (savedSort) {
+        const savedControl = document.querySelector(`input[name="sort"][value="${savedSort}"]`);
+        if (savedControl) {
+          sortControls.forEach(function(control) {
+            control.checked = false;
+          });
+          savedControl.checked = true;
+          sortEntries(savedSort);
+        }
+      }
+
+      sortControls.forEach(function(control) {
+        control.addEventListener('change', function() {
+          if (this.checked) {
+            localStorage.setItem(storageKey, this.value);
+            sortEntries(this.value);
+          }
+        });
+      });
+    });
+  </script>
 {% endblock %}

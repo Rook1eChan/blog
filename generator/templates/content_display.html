@@ -1,22 +1,143 @@
 {% extends "layout.html" %}
-{% block title %}{{ title }} | {{ config.site_title }}{% endblock %}
+{% block title %}{{ content.title }}{% endblock %}
+{% block social_image %}
+  {% if social_image_url %}
+  <meta name="twitter:image" content="{{ social_image_url }}">
+  <meta property="og:image" content="{{ social_image_url }}">
+  {% else %}
+  {{ super() }}
+  {% endif %}
+{% endblock %}
+
+{% block twitter_card %}
+  {% if social_image_url %}
+  <meta name="twitter:card" content="summary_large_image">
+  {% else %}
+  {{ super() }}
+  {% endif %}
+{% endblock %}
+
+{% block htmlhead %}
+  {{ super() }}
+  <meta name="description" content="{{ ctx.render_summary()|striptags }}">
+  <meta name="twitter:description" content="{{ ctx.render_summary()|striptags }}">
+  <meta property="og:description" content="{{ ctx.render_summary()|striptags }}">
+  <meta property="og:type" content="article">
+  {% if ctx.pub_date %}
+  <meta property="article:published_time" content="{{ ctx.pub_date.isoformat() }}">
+  <meta property="article:author" content="{{ config.author }}">
+  {% if ctx.tags %}
+  {% for tag in ctx.tags %}
+  <meta property="article:tag" content="{{ tag }}">
+  {% endfor %}
+  {% endif %}
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "BlogPosting",
+    "headline": "{{ content.title|e }}",
+    "description": "{{ ctx.render_summary()|striptags|e }}",
+    "author": {
+      "@type": "Person",
+      "name": "{{ config.author }}",
+      "url": "{{ config.site_url }}about/"
+    },
+    "datePublished": "{{ ctx.pub_date.isoformat() }}",
+    "url": "{{ config.site_url.rstrip('/') }}{{ slug }}",
+    "mainEntityOfPage": {
+      "@type": "WebPage",
+      "@id": "{{ config.site_url.rstrip('/') }}{{ slug }}"
+    },
+    "publisher": {
+      "@type": "Person",
+      "name": "{{ config.author }}",
+      "url": "{{ config.site_url }}about/"
+    }{% if social_image_url %},
+    "image": {
+      "@type": "ImageObject",
+      "url": "{{ social_image_url }}",
+      "width": 1200,
+      "height": 630
+    }{% endif %}{% if ctx.tags %},
+    "keywords": {{ ctx.tags|tojson }}{% endif %}
+  }
+  </script>
+  {% endif %}
+{% endblock %}
 {% block body %}
-<article class="entry">
-  <header class="entry-header">
-    <h1 class="entry-title">{{ post.title }}</h1>
-    {% if post.pub_date %}
-    <div class="entry-meta">
-      <time datetime="{{ post.pub_date.isoformat() }}">{{ format_date(post.pub_date, format='long') }}</time>
-      {% if post.tags %}
-      <span class="entry-tags">
-        {% for tag in post.tags %}<a href="{{ link_to('tag', tag=tag) }}">#{{ tag }}</a>{% endfor %}
-      </span>
-      {% endif %}
-    </div>
-    {% endif %}
-  </header>
-  <div class="entry-content">
-    {{ body }}
-  </div>
-</article>
+  {{ content.html_title }}
+  {% if ctx.pub_date %}
+  <p class=date data-date="{{ ctx.pub_date.isoformat() }}">写于 {{ format_date(ctx.pub_date, format='full') }}</p>
+  {% endif %}
+
+  {{ content.fragment }}
+
+  {% if ctx.tags %}
+  <p class=tags>本文标签
+    {% for tag in ctx.tags|sort(case_sensitive=true) %}
+      {%- if not loop.first and not loop.last %}、{% endif -%}
+      {%- if loop.last and not loop.first %} 和 {% endif %}
+      <a href="{{ link_to('tag', tag=tag) }}">{{ tag }}</a>
+    {%- endfor %}
+  {% endif %}
+
+  <p class="markdown-links">
+    <a href="{{ url(slug.rstrip('/')) }}.md" id="copy-markdown" hx-boost="false">复制为</a> / <a href="{{ url(slug.rstrip('/')) }}.md" id="view-markdown" hx-boost="false">查看</a> markdown
+  </p>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const copyLink = document.getElementById('copy-markdown');
+      const markdownUrl = '{{ url(slug.rstrip('/')) }}.md';
+
+      function showFlashNotification(message) {
+        const notification = document.createElement('div');
+        notification.className = 'flash-notification';
+        notification.textContent = message;
+
+        document.body.appendChild(notification);
+
+        requestAnimationFrame(() => {
+          notification.style.opacity = '1';
+        });
+
+        setTimeout(() => {
+          notification.style.opacity = '0';
+          setTimeout(() => {
+            document.body.removeChild(notification);
+          }, 200);
+        }, 1500);
+      }
+
+      async function copyMarkdown() {
+        try {
+          const response = await fetch(markdownUrl);
+          const markdown = await response.text();
+          await navigator.clipboard.writeText(markdown);
+
+          showFlashNotification('已复制此页面的 markdown 到剪贴板');
+        } catch (err) {
+          console.error('Failed to copy markdown:', err);
+          alert('复制 markdown 到剪贴板失败');
+        }
+      }
+
+      if (copyLink) {
+        copyLink.addEventListener('click', function(e) {
+          e.preventDefault();
+          copyMarkdown();
+        });
+      }
+
+      document.addEventListener('keydown', function(e) {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
+          const selection = window.getSelection();
+          if (selection.toString().length === 0) {
+            e.preventDefault();
+            copyMarkdown();
+          }
+        }
+      });
+    });
+  </script>
 {% endblock %}

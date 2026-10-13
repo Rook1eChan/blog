@@ -1,13 +1,30 @@
 {% extends "layout.html" %}
-{% block title %}标签 Tags | {{ config.site_title }}{% endblock %}
+{% block title %}标签{% endblock %}
 {% block body %}
-<h1>标签 Tags</h1>
-<p class="archive-hint"><a href="{{ link_to('archive') }}">按时间浏览 →</a></p>
-<ul class="tagcloud">
-  {% for tag in get_tags(limit=100) %}
-  <li><a href="{{ link_to('tag', tag=tag.name) }}"
-         style="font-size: {{ tag.size }}%"
-         data-count="{{ tag.count }}">#{{ tag.name }}</a></li>
-  {% endfor %}
-</ul>
+  <h1>标签</h1>
+
+  <p>
+    <a href="{{ link_to('archive') }}">按时间浏览归档</a>
+  </p>
+
+  <ul class=tagcloud>
+  {%- for tag in get_tags(limit=50) %}
+    <li><a href="{{ link_to('tag', tag=tag.name) }}" style="font-size: {{
+      tag.size }}%" data-count="{{ tag.count }}" class="tag-link">{{ tag.name }}</a>
+  {%- endfor %}
+  </ul>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const tagLinks = document.querySelectorAll('.tag-link');
+
+      tagLinks.forEach(function(link) {
+        const count = link.getAttribute('data-count');
+        const tooltip = document.createElement('div');
+        tooltip.className = 'tag-tooltip';
+        tooltip.textContent = count === '1' ? '1 篇' : count + ' 篇';
+        link.appendChild(tooltip);
+      });
+    });
+  </script>
 {% endblock %}

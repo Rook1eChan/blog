@@ -4,6 +4,10 @@
 Walks ``content/`` (posts + standalone pages), renders them through the
 Jinja2 templates in ``generator/templates`` and writes a fully static site
 into ``_build/``.
+
+The templates are closely modelled on `mitsuhiko/lucumr` (same HTML
+structure and CSS class names), but every URL is emitted through ``url()`` /
+``static_url()`` so the whole site can live under a sub-path (``/blog``).
 """
 import re
 import shutil
@@ -13,6 +17,7 @@ from pathlib import Path
 
 import yaml
 from jinja2 import Environment, FileSystemLoader
+from markupsafe import Markup, escape
 
 from generator.config import CONFIG, IGNORE_PATTERNS
 from generator.markup import (
@@ -25,9 +30,14 @@ from generator.pagination import Pagination
 
 TEMPLATE_DIR = Path(__file__).parent / "templates"
 BASE_PATH = CONFIG["base_path"].rstrip("/")
-SITE_URL = CONFIG["site_url"].rstrip("/")
+SITE_URL = CONFIG["site_url"]
 
 _LEADING_ZERO = re.compile(r"posts/(\d{4})/(\d{2})-(\d{2})-(.+)$")
+
+MONTH_NAMES = {
+    1: "1 月", 2: "2 月", 3: "3 月", 4: "4 月", 5: "5 月", 6: "6 月",
+    7: "7 月", 8: "8 月", 9: "9 月", 10: "10 月", 11: "11 月", 12: "12 月",
+}
 
 
 class BlogPost:
@@ -107,6 +117,15 @@ class BlogPost:
     def render_summary(self):
         return render_summary(self.summary)
 
+    def content_dict(self):
+        """The ``content`` object the content_display template expects."""
+        html_title = Markup("<h1>%s</h1>" % escape(self.title))
+        return {
+            "title": self.title,
+            "html_title": html_title,
+            "fragment": self.render_body(),
+        }
+
 
 class Builder:
     def __init__(self):
@@ -138,9 +157,12 @@ class Builder:
             return url("/%s/%s" % (CONFIG["static_folder"], path.lstrip("/")))
 
         def link_to(name, **kw):
-            if name == "page":
+            if "slug" in kw:
                 return url(kw["slug"])
-            if name == "tag":
+            if "page" in kw:
+                n = kw["page"]
+                return url("/") if n <= 1 else url("/page/%d/" % n)
+            if name == "tag" or "tag" in kw:
                 return url("/tags/%s/" % kw["tag"])
             if name == "blog_archive":
                 year, month = kw.get("year"), kw.get("month")
@@ -149,20 +171,20 @@ class Builder:
                 if year:
                     return url("/%s/" % year)
                 return url("/archive/")
-            if name == "tagcloud":
+            if name in ("tagcloud", "tags"):
                 return url("/tags/")
             if name == "archive":
                 return url("/archive/")
             return url("/")
 
-        def format_date(dt, format="medium"):
-            if not dt:
-                return ""
-            if format == "year":
+        def format_date(dt=None, format="medium"):
+            if dt is None:
+                dt = datetime.now()
+            if format == "YYYY":
                 return dt.strftime("%Y")
-            if format == "long":
-                return "%d 年 %02d 月 %02d 日" % (dt.year, dt.month, dt.day)
-            return dt.strftime("%Y-%m-%d")
+            if format in ("long", "full"):
+                return "%d 年 %d 月 %d 日" % (dt.year, dt.month, dt.day)
+            return "%04d-%02d-%02d" % (dt.year, dt.month, dt.day)
 
         def get_tags(limit=None):
             counts = {}
@@ -190,6 +212,9 @@ class Builder:
             get_tags=get_tags,
             now=datetime.now(timezone.utc),
             current_year=datetime.now().year,
+            links=[],
+            social_image_url=None,
+            slug="",
         )
 
     # -- content loading --------------------------------------------------
@@ -214,7 +239,7 @@ class Builder:
                 post = BlogPost(rel, path.read_text(encoding="utf-8"))
                 self.posts.append(post)
 
-            # top-level standalone pages (about.md, ...)
+        # top-level standalone pages (about.md, ...)
         for path in sorted(self.content_dir.glob("*.md")):
             if self._ignored(path.name):
                 continue
@@ -222,7 +247,6 @@ class Builder:
             page = BlogPost(rel, path.read_text(encoding="utf-8"))
             self.pages.append((page.slug.strip("/"), page))
 
-        # newest first
         self.posts.sort(key=lambda p: (p.pub_date or datetime.min), reverse=True)
         for post in self.posts:
             for tag in post.tags:
@@ -257,28 +281,27 @@ class Builder:
         print("Built %d posts, %d pages -> %s"
               % (len(self.posts), len(self.pages), self.output_dir))
 
-    def build_posts(self):
+    def _render_content(self, obj, slug, is_page=False):
         template = self.env.get_template("content_display.html")
+        return template.render(**self._context(
+            content=obj.content_dict(),
+            ctx=obj,
+            slug=slug,
+            social_image_url=None,
+            is_page=is_page,
+        ))
+
+    def build_posts(self):
         for post in self.posts:
-            html = template.render(**self._context(
-                title=post.title,
-                slug=post.slug,
-                post=post,
-                body=post.render_body(),
-            ))
-            self._write(post.output_rel, html)
+            self._write(post.output_rel, self._render_content(post, post.slug))
+            # raw markdown, for the "copy / view markdown" links
+            md_rel = post.slug.strip("/") + ".md"
+            self._write(md_rel, post.content.lstrip("\n"))
 
     def build_pages(self):
-        template = self.env.get_template("content_display.html")
         for slug, page in self.pages:
-            html = template.render(**self._context(
-                title=page.title,
-                slug="/%s/" % slug,
-                post=page,
-                body=page.render_body(),
-                is_page=True,
-            ))
-            self._write("%s/index.html" % slug, html)
+            self._write("%s/index.html" % slug,
+                        self._render_content(page, "/%s/" % slug, is_page=True))
 
     def build_index(self):
         template = self.env.get_template("blog/index.html")
@@ -287,10 +310,9 @@ class Builder:
         for page_num in range(1, total_pages + 1):
             pagination = Pagination(self.posts, per_page, page_num)
             html = template.render(**self._context(
-                title=CONFIG["site_title"],
-                slug="/" if page_num == 1 else "/page/%d/" % page_num,
                 pagination=pagination,
                 show_pagination=total_pages > 1,
+                slug="/" if page_num == 1 else "/page/%d/" % page_num,
             ))
             if page_num == 1:
                 self._write("index.html", html)
@@ -303,8 +325,8 @@ class Builder:
         for post in self.posts:
             if not post.pub_date:
                 continue
-            year = years.setdefault(post.pub_date.year, {})
-            year.setdefault(post.pub_date.month, []).append(post)
+            years.setdefault(post.pub_date.year, {}).setdefault(
+                post.pub_date.month, []).append(post)
 
         archive = []
         for year in sorted(years, reverse=True):
@@ -312,45 +334,52 @@ class Builder:
             for month in sorted(years[year], reverse=True):
                 months.append({
                     "month": month,
-                    "month_name": "%d 月" % month,
+                    "month_name": MONTH_NAMES[month],
                     "count": len(years[year][month]),
                 })
             archive.append({"year": year, "months": months})
 
         archive_template = self.env.get_template("blog/archive.html")
         self._write("archive/index.html", archive_template.render(**self._context(
-            title="归档 Archive",
-            slug="/archive/",
-            archive=archive,
-            total_posts=len(self.posts),
+            archive=archive, entry=None, slug="/archive/",
         )))
 
         year_template = self.env.get_template("blog/year_archive.html")
+        month_template = self.env.get_template("blog/month_archive.html")
         for year in sorted(years, reverse=True):
-            entries = sorted(
-                [p for p in self.posts if p.pub_date and p.pub_date.year == year],
-                key=lambda p: p.pub_date, reverse=True)
+            months = []
+            for month in sorted(years[year], reverse=True):
+                entries = sorted(years[year][month],
+                                 key=lambda p: p.pub_date, reverse=True)
+                months.append({
+                    "month": month,
+                    "month_name": MONTH_NAMES[month],
+                    "entries": entries,
+                })
+                self._write("%d/%d/index.html" % (year, month),
+                            month_template.render(**self._context(
+                                entry={"year": year,
+                                       "month_name": MONTH_NAMES[month],
+                                       "entries": entries},
+                                slug="/%d/%d/" % (year, month),
+                            )))
             self._write("%d/index.html" % year, year_template.render(**self._context(
-                title="%d 年 Archive" % year,
+                entry={"year": year, "months": months},
                 slug="/%d/" % year,
-                year=year,
-                entries=entries,
             )))
 
     def build_tags(self):
         cloud = self.env.get_template("tagcloud.html")
-        self._write("tags/index.html", cloud.render(**self._context(
-            title="标签 Tags", slug="/tags/",
-        )))
+        self._write("tags/index.html", cloud.render(**self._context(slug="/tags/")))
 
         tag_template = self.env.get_template("tag.html")
         for tag, entries in self.by_tag.items():
-            entries = sorted(entries, key=lambda p: (p.pub_date or datetime.min), reverse=True)
+            entries = sorted(entries, key=lambda p: (p.pub_date or datetime.min),
+                             reverse=True)
             self._write("tags/%s/index.html" % tag, tag_template.render(**self._context(
-                title='标签 "%s"' % tag,
-                slug="/tags/%s/" % tag,
                 tag={"name": tag, "count": len(entries)},
                 entries=entries,
+                slug="/tags/%s/" % tag,
             )))
 
     def build_feeds(self):
@@ -363,9 +392,7 @@ class Builder:
 
     def build_404(self):
         template = self.env.get_template("404.html")
-        self._write("404/index.html", template.render(**self._context(
-            title="页面未找到 404", slug="/404/",
-        )))
+        self._write("404/index.html", template.render(**self._context(slug="/404/")))
 
     def copy_static(self):
         if self.static_dir.exists():
