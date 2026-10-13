@@ -59,6 +59,7 @@
         }
         node.setAttribute("data-theme", theme);
         $THEME = theme;
+        window.dispatchEvent(new Event("dark:themechange"));
       }
 
       selectTheme(localStorage.getItem("theme") || "system");
