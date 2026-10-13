@@ -316,8 +316,9 @@
       float thresholdLevel = clamp(threshold + mix(0.1, -0.1, u_isLight), 0.001, 0.999);
       float dithered = step(thresholdLevel, gray);
 
-      vec3 darkInk = vec3(0.91, 0.835, 0.718);   // #e8d5b7
-      vec3 lightInk = vec3(0.541, 0.329, 0.110); // #8a541c
+      // Site blue palette: --primary-color (light-dark(#115ca1, #66b3ff))
+      vec3 darkInk = vec3(0.400, 0.702, 1.000); // #66b3ff on the dark navy page
+      vec3 lightInk = vec3(0.067, 0.361, 0.631); // #115ca1 on the light page
       vec3 ink = mix(darkInk, lightInk, u_isLight);
       float inkAlpha = mix(dithered, 1.0 - dithered, u_isLight);
       if (u_alphaFallback > 0.5) {
@@ -516,7 +517,10 @@
   }
 
   function currentSource() {
-    if (videoPlaying && video.readyState >= 2) return video;
+    // Prefer the video whenever it has a decodable frame - even while paused -
+    // so resuming from a hidden tab shows the video immediately instead of
+    // flashing the static poster.
+    if (video.readyState >= 2) return video;
     if (fallbackReady) return fallbackImage;
     return null;
   }
@@ -579,11 +583,11 @@
   }
 
   function tryPlayVideo() {
-    if (videoPlaying || REDUCED_MOTION) return;
-    video.play().then(function() {
-      videoPlaying = true;
-      for (const effect of effects) effect.needsResize = true;
-    }).catch(function() {
+    // Don't short-circuit on the `videoPlaying` flag: it goes stale when the
+    // browser pauses the video (e.g. on tab switch) and would stop us from
+    // ever calling play() again.
+    if (REDUCED_MOTION || !video.paused) return;
+    video.play().catch(function() {
       // Autoplay blocked - retry on first user interaction.
     });
   }
@@ -636,6 +640,13 @@
     });
 
     video.addEventListener('loadeddata', tryPlayVideo);
+    video.addEventListener('playing', function() {
+      videoPlaying = true;
+      for (const effect of effects) effect.needsResize = true;
+    });
+    video.addEventListener('pause', function() {
+      videoPlaying = false;
+    });
 
     document.addEventListener('click', onFirstInteraction);
     document.addEventListener('touchstart', onFirstInteraction);
