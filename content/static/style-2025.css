@@ -123,12 +123,13 @@ h1 a, h2 a, h3 a, h4 a,
 h5 a, h6 a                  { text-decoration: none; }
 h1 a:hover, h2 a:hover,
 h3 a:hover, h4 a:hover      { text-decoration: underline; }
-h1                          { margin: 5px 0 25px 0; }
-h2                          { margin: 25px 0 10px 0; }
-h3                          { margin: 35px 0 10px 0; }
-h1                          { font-size: 52px; line-height: 56px; text-wrap: balance; }
-h2                          { font-size: 42px; line-height: 44px; }
-h3                          { font-size: 32px; line-height: 36px; }
+h1                          { margin: 0 0 25px 0; }
+h2                          { margin: 19px 0 5px 0; }
+h3                          { margin: 32px 0 8px 0; }
+/* line-height 需容纳思源宋体（自然行高约 1.44em），1.05~1.13 会让中文标题行挤在一起 */
+h1                          { font-size: 52px; line-height: 1.3; text-wrap: balance; }
+h2                          { font-size: 42px; line-height: 1.3; }
+h3                          { font-size: 32px; line-height: 1.3; }
 
 h1 em                       { color: black; font-size: 32px; display: block;
                               margin-left: 25px; margin-top: -15px; }
@@ -162,7 +163,9 @@ ul ol, ol ul, ul ul, ol ol      { margin: 10px 0; padding: 0 0 0 40px; }
 li                              { padding: 0; }
 li p                            { margin: 0; padding: 0; }
 li p + p                        { margin-top: 15px; }
-h1 + p.date                     { margin-top: -25px; font-style: italic; }
+/* 中文没有真正的斜体，伪斜体会把中文掰歪、并把行首推右，故禁止斜体合成 */
+h1 + p.date                     { margin-top: -30px; font-style: italic;
+                                  font-synthesis-style: none; }
 blockquote                      { font-style: italic; }
 
 /* code formatting.  no monospace because of webkit (bug?) */
@@ -243,9 +246,10 @@ hr { border: none; border-bottom: 1px solid var(--border-color); height: 10px;
     div.container { padding: 12px; margin: 0; }
     div.header { height: auto; margin: 0; }
     div.navigation { margin-bottom: 20px; }
-    h1 { font-size: 42px; line-height: 44px; }
-    h2 { font-size: 36px; line-height: 38px; }
-    h3 { font-size: 28px; line-height: 30px; }
+    /* line-height 同上：需容纳思源宋体，1.05 的紧凑行距会让中文标题行挤在一起 */
+    h1 { font-size: 42px; line-height: 1.3; }
+    h2 { font-size: 36px; line-height: 1.3; }
+    h3 { font-size: 28px; line-height: 1.3; }
 }
 
 /* pygments fixes */
