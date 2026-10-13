@@ -24,7 +24,7 @@ generator/          生成器 (Python 包)
   builder.py        构建编排
   commands.py       build / serve 命令
   templates/        Jinja2 模板
-content/            内容
+blog/               内容
   posts/年/MM-DD-slug.md   文章（日期取自文件名）
   about.md          独立页面
   static/           样式等静态资源
@@ -42,7 +42,7 @@ make serve   # 本地预览 http://127.0.0.1:5001/blog/（改动自动重建）
 
 ## 写一篇新文章
 
-在 `content/posts/2026/` 下新建 `MM-DD-标题.md`：
+在 `blog/posts/2026/` 下新建 `MM-DD-标题.md`：
 
 ```markdown
 ---

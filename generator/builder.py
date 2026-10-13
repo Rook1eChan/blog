@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """The static site builder.
 
-Walks ``content/`` (posts + standalone pages), renders them through the
+Walks ``blog/`` (posts + standalone pages), renders them through the
 Jinja2 templates in ``generator/templates`` and writes a fully static site
 into ``_build/``.
 

@@ -17,7 +17,7 @@ CONFIG = {
     "base_path": os.environ.get("BLOG_BASE_PATH", "/blog"),
 
     # --- 构建相关 ---
-    "content_folder": "content",
+    "content_folder": "blog",
     "static_folder": "static",
     "output_folder": "_build",
     "posts_folder": "posts",
