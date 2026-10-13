@@ -74,10 +74,9 @@
       </div>
       <div class=navigation>
         <ul>
-          <li><a href="{{ url('/') }}">博客</a>
-          <li><a href="{{ url('/archive/') }}">归档</a>
-          <li><a href="{{ url('/tags/') }}">标签</a>
-          <li><a href="{{ url('/about/') }}">关于</a>
+          {% for href, label, key in config.navigation %}
+          <li><a href="{{ url(href) }}">{{ label }}</a>
+          {% endfor %}
         </ul>
       </div>
       <div class=body hx-history-elt>
