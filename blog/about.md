@@ -10,8 +10,6 @@ summary: "关于我和这个博客。"
 
 你好，我是 **Rook1eChan**。这里记录我的学习笔记和日常想法。
 
-Hi, I'm Rook1eChan. This blog is where I write about machine learning,
-information retrieval, RAG, and everyday notes.
 
 ## 联系我
 

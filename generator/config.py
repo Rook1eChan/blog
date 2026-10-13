@@ -4,7 +4,7 @@ import os
 
 CONFIG = {
     # --- 站点基本信息 ---
-    "site_title": "Rook1eChan's Blog",
+    "site_title": "NotaRook1e",
     "author": "Rook1eChan",
     "subtitle": "记录学习与思考的地方 · Notes on learning and thinking",
     "description": "Rook1eChan 的个人博客：机器学习、信息检索、RAG 与日常思考。",
