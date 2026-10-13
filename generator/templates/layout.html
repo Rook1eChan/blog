@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="{{ config.language }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>{% block title %}{{ config.site_title }}{% endblock %}</title>
+  <meta name="description" content="{{ config.description }}">
+  <link rel="stylesheet" href="{{ static_url('style.css') }}">
+  <link rel="stylesheet" href="{{ static_url('_pygments.css') }}">
+  <link rel="alternate" type="application/atom+xml" title="{{ config.site_title }}" href="{{ url('/feed.atom') }}">
+  <link rel="alternate" type="application/rss+xml" title="{{ config.site_title }}" href="{{ url('/feed.xml') }}">
+  <meta property="og:site_name" content="{{ config.site_title }}">
+  <meta property="og:title" content="{{ self.title() }}">
+  <meta property="og:url" content="{{ config.site_url }}{{ slug.lstrip('/') }}">
+  {% block extrahead %}{% endblock %}
+</head>
+<body>
+  <header class="site-header">
+    <a class="site-title" href="{{ url('/') }}">{{ config.site_title }}</a>
+    <div class="site-subtitle">{{ config.subtitle }}</div>
+    <nav class="site-nav">
+      <ul>
+        {% for href, label, key in config.navigation %}
+        <li><a href="{{ url(href) }}">{{ label }}</a></li>
+        {% endfor %}
+      </ul>
+    </nav>
+  </header>
+  <main class="site-body">
+    {% block body %}{% endblock %}
+  </main>
+  <footer class="site-footer">
+    <p>&copy; {{ current_year }} {{ config.author }}.
+      Powered by a tiny Python generator, inspired by
+      <a href="https://github.com/mitsuhiko/lucumr">lucumr</a>.</p>
+    <p><a href="{{ url('/feed.atom') }}">Atom</a> ·
+       <a href="{{ url('/feed.xml') }}">RSS</a></p>
+  </footer>
+</body>
+</html>

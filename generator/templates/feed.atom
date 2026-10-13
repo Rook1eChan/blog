@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xml:lang="{{ config.language }}">
+  <title>{{ config.site_title }}</title>
+  <subtitle>{{ config.subtitle }}</subtitle>
+  <link href="{{ config.site_url }}"/>
+  <link rel="self" href="{{ config.site_url }}feed.atom"/>
+  <id>{{ config.site_url }}</id>
+  <updated>{{ now.strftime('%Y-%m-%dT%H:%M:%SZ') }}</updated>
+  <author><name>{{ config.author }}</name></author>
+  <generator>tiny-python-generator</generator>
+  {% for post in posts %}
+  <entry>
+    <title>{{ post.title }}</title>
+    <link href="{{ config.site_url }}{{ post.slug.lstrip('/') }}"/>
+    <id>{{ config.site_url }}{{ post.slug.lstrip('/') }}</id>
+    <updated>{{ post.pub_date.strftime('%Y-%m-%dT00:00:00Z') }}</updated>
+    <published>{{ post.pub_date.strftime('%Y-%m-%dT00:00:00Z') }}</published>
+    <author><name>{{ config.author }}</name></author>
+    {% for tag in post.tags %}<category term="{{ tag }}"/>
+    {% endfor %}
+    <summary type="html">{{ (post.summary or post.title) | forceescape }}</summary>
+    <content type="html">{{ post.render_body() | forceescape }}</content>
+  </entry>
+  {% endfor %}
+</feed>

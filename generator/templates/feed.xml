@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>{{ config.site_title }}</title>
+    <link>{{ config.site_url }}</link>
+    <description>{{ config.description }}</description>
+    <language>{{ config.language }}</language>
+    <atom:link href="{{ config.site_url }}feed.xml" rel="self" type="application/rss+xml"/>
+    <lastBuildDate>{{ now.strftime('%a, %d %b %Y %H:%M:%S +0000') }}</lastBuildDate>
+    {% for post in posts %}
+    <item>
+      <title>{{ post.title }}</title>
+      <link>{{ config.site_url }}{{ post.slug.lstrip('/') }}</link>
+      <guid isPermaLink="true">{{ config.site_url }}{{ post.slug.lstrip('/') }}</guid>
+      <pubDate>{{ post.pub_date.strftime('%a, %d %b %Y 00:00:00 +0000') }}</pubDate>
+      {% for tag in post.tags %}<category>{{ tag }}</category>
+      {% endfor %}
+      <description>{{ post.render_body() | forceescape }}</description>
+    </item>
+    {% endfor %}
+  </channel>
+</rss>

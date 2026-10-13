@@ -1,0 +1,14 @@
+{% extends "layout.html" %}
+{% block title %}标签 {{ tag.name }} | {{ config.site_title }}{% endblock %}
+{% block body %}
+<h1>标签 <a href="{{ link_to('tagcloud') }}">#{{ tag.name }}</a></h1>
+<p class="archive-hint">{{ tag.count }} 篇</p>
+<ul class="post-archive">
+  {% for entry in entries %}
+  <li>
+    <span class="archive-date">{{ format_date(entry.pub_date, format='medium') }}</span>
+    <a href="{{ link_to('page', slug=entry.slug) }}">{{ entry.title }}</a>
+  </li>
+  {% endfor %}
+</ul>
+{% endblock %}

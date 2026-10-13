@@ -1,0 +1,20 @@
+{% extends "layout.html" %}
+{% block title %}归档 Archive | {{ config.site_title }}{% endblock %}
+{% block body %}
+<h1>归档 Archive</h1>
+<p class="archive-hint">共 {{ total_posts }} 篇 ·
+  <a href="{{ link_to('tagcloud') }}">标签云 Tags</a></p>
+<ul class="archive-years">
+  {% for entry in archive %}
+  <li>
+    <a class="archive-year" href="{{ link_to('blog_archive', year=entry.year) }}">{{ entry.year }}</a>
+    <ul class="archive-months">
+      {% for sub in entry.months %}
+      <li><a href="{{ link_to('blog_archive', year=entry.year, month=sub.month) }}">{{ sub.month_name }}</a>
+        <span class="archive-count">{{ sub.count }}</span></li>
+      {% endfor %}
+    </ul>
+  </li>
+  {% endfor %}
+</ul>
+{% endblock %}

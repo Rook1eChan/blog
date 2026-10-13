@@ -1,0 +1,22 @@
+{% extends "layout.html" %}
+{% block title %}{{ title }} | {{ config.site_title }}{% endblock %}
+{% block body %}
+<article class="entry">
+  <header class="entry-header">
+    <h1 class="entry-title">{{ post.title }}</h1>
+    {% if post.pub_date %}
+    <div class="entry-meta">
+      <time datetime="{{ post.pub_date.isoformat() }}">{{ format_date(post.pub_date, format='long') }}</time>
+      {% if post.tags %}
+      <span class="entry-tags">
+        {% for tag in post.tags %}<a href="{{ link_to('tag', tag=tag) }}">#{{ tag }}</a>{% endfor %}
+      </span>
+      {% endif %}
+    </div>
+    {% endif %}
+  </header>
+  <div class="entry-content">
+    {{ body }}
+  </div>
+</article>
+{% endblock %}

@@ -1,0 +1,14 @@
+{% extends "layout.html" %}
+{% block title %}{{ year }} 年 | {{ config.site_title }}{% endblock %}
+{% block body %}
+<h1>{{ year }} 年</h1>
+<p class="archive-hint"><a href="{{ link_to('archive') }}">← 返回归档</a></p>
+<ul class="post-archive">
+  {% for entry in entries %}
+  <li>
+    <span class="archive-date">{{ format_date(entry.pub_date, format='medium') }}</span>
+    <a href="{{ link_to('page', slug=entry.slug) }}">{{ entry.title }}</a>
+  </li>
+  {% endfor %}
+</ul>
+{% endblock %}

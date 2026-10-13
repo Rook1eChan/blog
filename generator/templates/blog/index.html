@@ -1,0 +1,26 @@
+{% extends "layout.html" %}
+{% block title %}{{ config.site_title }}{% endblock %}
+{% block body %}
+<div class="entry-list">
+  {% for entry in pagination.get_slice() %}
+  <article class="entry-overview">
+    <div class="entry-date">{{ format_date(entry.pub_date, format='medium') }}</div>
+    <div class="entry-detail">
+      <h2 class="entry-title"><a href="{{ link_to('page', slug=entry.slug) }}">{{ entry.title }}</a></h2>
+      {% if entry.summary %}
+      <div class="entry-summary">{{ entry.render_summary() }}</div>
+      {% endif %}
+      {% if entry.tags %}
+      <div class="entry-tags">
+        {% for tag in entry.tags %}<a href="{{ link_to('tag', tag=tag) }}">#{{ tag }}</a>{% endfor %}
+      </div>
+      {% endif %}
+    </div>
+  </article>
+  {% endfor %}
+</div>
+
+{% if show_pagination %}
+{% include "_pagination.html" %}
+{% endif %}
+{% endblock %}
