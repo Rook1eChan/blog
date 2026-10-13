@@ -194,7 +194,7 @@ div.entry-overview                  { margin: 25px 122px 25px 102px; }
 div.entry-overview h1,
 div.entry-overview div.summary,
 div.entry-overview div.summary p    { display: inline; line-height: 25px; }
-div.entry-overview h1               { margin: 0; font-size: 17px;
+div.entry-overview h1               { margin: 0; font-size: 17px; font-weight: 500;
                                       font-family: 'Lora', 'Noto Serif SC', serif; }
 div.entry-overview h1:after         { content: " —"; color: var(--text-color); }
 div.entry-overview div.summary,
