@@ -1,9 +1,9 @@
-// Dithered video effect (header + footer)
+// Procedural dithered wave effect (header + footer)
 //
-// Renders a looping video through a 1-bit ordered-dither fragment shader
-// (Atkinson 4x4 by default, or Bayer 8x8 / random noise via ?dither=).
-// Transparent pixels let the CSS page background show through, so the water
-// fades into the page at the edges instead of being painted by the shader.
+// A metaball "sea" is generated in the fragment shader and then flattened to
+// 1-bit ordered-dither ink (Atkinson 4x4 by default, or Bayer 8x8 / random
+// noise via ?dither=).  Transparent pixels let the CSS page background show
+// through, so the water blends into the page instead of being painted over it.
 
 // Theme bridge so the effect can follow the site theme (light / dark / system).
 (function() {
@@ -136,7 +136,7 @@
     const chain = [];
     while (node && node.nodeType === 1) {
       chain.push(node);
-      node = node.parentElement;
+      node = node.parentNode;
     }
 
     let color = [1, 1, 1, 1];
@@ -227,46 +227,89 @@
 // The effect itself.
 (function() {
   const DEFAULT_DITHER = 'atkinson';
-  const FRAME_INTERVAL = 1000 / 30; // ~30fps is plenty for a 24fps source
-  const REDUCED_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-  // Resolve sibling static assets from this script's own URL so the site keeps
-  // working under any base path.
-  function staticUrl(name) {
-    const script = document.currentScript;
-    if (script && script.src) {
-      return script.src.replace(/[^/]+$/, name);
-    }
-    return name;
-  }
+  const FRAME_INTERVAL = 1000 / 30; // ~30fps is plenty
 
   const vsSource = `
     attribute vec2 a_position;
-    attribute vec2 a_texCoord;
-    varying vec2 v_texCoord;
     void main() {
       gl_Position = vec4(a_position, 0, 1);
-      v_texCoord = a_texCoord;
     }
   `;
 
   const fsSource = `
     precision highp float;
-    uniform sampler2D u_image;
-    uniform sampler2D u_bayer;
     uniform vec2 u_resolution;
-    uniform int u_ditherMode;  // 0 = Bayer, 1 = Atkinson, 2 = noise
+    uniform float u_time;
+    uniform float u_dpr;
     uniform float u_isLight;
     uniform float u_flip;
+    uniform float u_hover;
+    uniform int u_ditherMode;  // 0 = Bayer, 1 = Atkinson, 2 = noise
+    uniform sampler2D u_bayer;
     uniform float u_alphaFallback;
     uniform vec3 u_backgroundColor;
-    varying vec2 v_texCoord;
 
-    // Hash function for stable random noise
+    // Cheap hash - single multiply-add chain
     float hash(vec2 p) {
-      vec3 p3 = fract(vec3(p.xyx) * 0.1031);
-      p3 += dot(p3, p3.yzx + 33.33);
-      return fract((p3.x + p3.y) * p3.z);
+      return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+    }
+
+    vec2 hash2(vec2 p) {
+      p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)));
+      return fract(sin(p) * 43758.5453);
+    }
+
+    // Simple value noise - much cheaper than simplex
+    float vnoise(vec2 p) {
+      vec2 i = floor(p);
+      vec2 f = fract(p);
+      f = f * f * (3.0 - 2.0 * f);
+      return mix(
+        mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x),
+        mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x),
+        f.y
+      ) * 2.0 - 1.0;
+    }
+
+    // Metaball field - sums smooth falloff from nearby blob centers.
+    // Returns vec2(field, accentWeight) where accentWeight is 0-1 based on the
+    // accent blob contribution and the hover progress.
+    vec2 metaball(vec2 p, float time) {
+      vec2 i = floor(p);
+      vec2 f = fract(p);
+
+      float sum = 0.0;
+      float accentSum = 0.0;
+
+      for (int y = -1; y <= 1; y++) {
+        for (int x = -1; x <= 1; x++) {
+          vec2 neighbor = vec2(float(x), float(y));
+          vec2 cellId = i + neighbor;
+          vec2 point = hash2(cellId);
+          point = 0.5 + 0.4 * sin(time * 0.3 + 6.28 * point);
+          vec2 diff = neighbor + point - f;
+          float r2 = dot(diff, diff);
+
+          float influence = max(0.0, 1.0 - r2);
+          float contrib = influence * influence * influence;
+          sum += contrib;
+
+          float isAccent = step(0.92, hash(cellId + 0.5));
+          float blobDelay = hash(cellId + 0.7) * 0.75;
+          float blobVisible = smoothstep(blobDelay, blobDelay + 0.25, u_hover);
+          accentSum += contrib * isAccent * blobVisible;
+        }
+      }
+
+      float accentWeight = sum > 0.0 ? accentSum / sum : 0.0;
+      return vec2(sum, accentWeight);
+    }
+
+    // Cheap warping using value noise
+    vec2 warpCoords(vec2 p, float time) {
+      float warp1 = vnoise(p * 0.5 + time * 0.05);
+      float warp2 = vnoise(p * 0.3 - time * 0.03 + 100.0);
+      return p + vec2(warp1, warp2) * 0.4;
     }
 
     // Atkinson-style threshold pattern (4x4)
@@ -286,45 +329,77 @@
     }
 
     void main() {
-      // u_flip mirrors the whole effect vertically (the footer uses it so the
-      // water blends into the page from the top).  u_isLight additionally
-      // mirrors the source so its brighter top lands near the page background.
-      float mirrorY = u_isLight + u_flip - 2.0 * u_isLight * u_flip;
-      vec2 sampleCoord = vec2(v_texCoord.x, mix(v_texCoord.y, 1.0 - v_texCoord.y, mirrorY));
-      vec4 color = texture2D(u_image, sampleCoord);
-      float gray = dot(color.rgb, vec3(0.299, 0.587, 0.114));
+      float dpr = max(u_dpr, 1.0);
 
-      // Fade away at the edge facing the page content.
-      float screenY = gl_FragCoord.y / u_resolution.y;
-      screenY = mix(screenY, 1.0 - screenY, u_flip);
-      float fade = smoothstep(0.0, 0.4, screenY);
-      gray = mix(gray * fade, mix(1.0, gray, fade), u_isLight);
+      // Metaball space is measured in CSS pixels so the look is DPR independent.
+      vec2 p = gl_FragCoord.xy / dpr * 0.0133;
 
+      // Wavy water line.  pixelY is measured from the page-facing edge so the
+      // footer (u_flip) mirrors the header.  Everything is relative to the
+      // canvas height so the header and the much taller footer stay in
+      // proportion.
+      float xCoord = gl_FragCoord.x / dpr;
+      float boundary = u_resolution.y * 0.42;
+      boundary += vnoise(vec2(xCoord * 0.008, u_time * 0.08)) * u_resolution.y * 0.07;
+      boundary += vnoise(vec2(xCoord * 0.02, u_time * 0.04 + 50.0)) * u_resolution.y * 0.035;
+
+      float pixelY = mix(gl_FragCoord.y, u_resolution.y - gl_FragCoord.y, u_flip);
+      float distToBoundary = pixelY - boundary;
+
+      // Blobs pool against the boundary.
+      float wallInfluence = smoothstep(u_resolution.y * 0.22, 0.0, distToBoundary) * 0.25;
+
+      // Bottom layer - darker, larger scale
+      vec2 p1 = p * 0.7 + vec2(u_time * 0.02, u_time * 0.015);
+      vec2 meta1 = metaball(warpCoords(p1, u_time * 0.6), u_time * 0.6);
+      float field1 = meta1.x + wallInfluence;
+
+      // Top layer - brighter, smaller scale
+      vec2 p2 = p + vec2(u_time * 0.06, -u_time * 0.02);
+      vec2 meta2 = metaball(warpCoords(p2 + 100.0, u_time), u_time);
+      float field2 = meta2.x + wallInfluence;
+
+      float taper = smoothstep(-u_resolution.y * 0.16, 0.0, distToBoundary);
+      field1 *= taper;
+      field2 *= taper;
+
+      // Turn the metaball field into an ink density (0 = none, 1 = solid ink).
+      // The old effect hard-thresholded the field at 0.92 / 0.95; ramping
+      // around those values keeps the blob shapes while giving the dither a
+      // gradient to work with.
+      float body = smoothstep(0.50, 1.10, field1) * 0.50;
+      float foam = smoothstep(0.72, 1.32, field2) * 0.35;
+      float density = clamp(body + foam, 0.0, 0.85);
+
+      // A few blobs light up in the accent colour while hovering.
+      float accentDensity = clamp(max(meta1.y, meta2.y) * u_hover * 1.5, 0.0, 1.0);
+      accentDensity *= smoothstep(0.05, 0.4, density);
+
+      // ---- ordered dithering ----
       float threshold;
       if (u_ditherMode == 2) {
         threshold = hash(gl_FragCoord.xy);
       } else if (u_ditherMode == 1) {
-        // Slight contrast boost to mimic Atkinson's 75% error diffusion
-        gray = clamp(gray * 1.2 - 0.1, 0.0, 1.0);
         threshold = atkinsonThreshold(gl_FragCoord.xy);
       } else {
-        vec2 bayerCoord = mod(gl_FragCoord.xy, 8.0) / 8.0;
-        threshold = texture2D(u_bayer, bayerCoord).r;
+        threshold = texture2D(u_bayer, mod(gl_FragCoord.xy, 8.0) / 8.0).r;
       }
 
-      // Bias the threshold toward the edge color for each theme.
-      float thresholdLevel = clamp(threshold + mix(0.1, -0.1, u_isLight), 0.001, 0.999);
-      float dithered = step(thresholdLevel, gray);
+      float dithered = step(clamp(threshold, 0.001, 0.999), density);
+      float accent = step(fract(threshold + 0.5), accentDensity) * dithered;
 
-      // Site blue palette: --primary-color (light-dark(#115ca1, #66b3ff))
-      vec3 darkInk = vec3(0.400, 0.702, 1.000); // #66b3ff on the dark navy page
-      vec3 lightInk = vec3(0.067, 0.361, 0.631); // #115ca1 on the light page
+      vec3 darkInk = vec3(0.400, 0.702, 1.000);      // #66b3ff
+      vec3 lightInk = vec3(0.067, 0.361, 0.631);     // #115ca1
+      vec3 darkAccent = vec3(1.000, 0.400, 0.400);   // #ff6666
+      vec3 lightAccent = vec3(0.804, 0.055, 0.055);  // #cd0e0e
+
       vec3 ink = mix(darkInk, lightInk, u_isLight);
-      float inkAlpha = mix(dithered, 1.0 - dithered, u_isLight);
+      ink = mix(ink, mix(darkAccent, lightAccent, u_isLight), accent);
+
       if (u_alphaFallback > 0.5) {
-        gl_FragColor = vec4(mix(u_backgroundColor, ink, inkAlpha), 1.0);
+        gl_FragColor = vec4(mix(u_backgroundColor, ink, dithered), 1.0);
       } else {
-        gl_FragColor = vec4(ink, inkAlpha);
+        gl_FragColor = vec4(ink, dithered);
       }
     }
   `;
@@ -356,24 +431,6 @@
   const ditherParam = new URLSearchParams(window.location.search).get('dither');
   const ditherMode = ditherModes[ditherParam] ?? ditherModes[DEFAULT_DITHER];
 
-  // Shared media: one video element drives every canvas.
-  const video = document.createElement('video');
-  video.crossOrigin = 'anonymous';
-  video.loop = true;
-  video.muted = true;
-  video.playsInline = true;
-  video.preload = 'auto';
-  video.setAttribute('muted', '');
-  video.setAttribute('playsinline', '');
-  video.src = staticUrl('waves.mp4');
-
-  const fallbackImage = new Image();
-  fallbackImage.crossOrigin = 'anonymous';
-  fallbackImage.src = staticUrl('waves-fallback.jpg');
-
-  let videoPlaying = false;
-  let fallbackReady = false;
-
   function createEffect(canvasId, flip) {
     const canvas = document.getElementById(canvasId);
     if (!canvas) return null;
@@ -403,66 +460,47 @@
     gl.enableVertexAttribArray(posLoc);
     gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0);
 
-    const texLoc = gl.getAttribLocation(program, 'a_texCoord');
-    gl.enableVertexAttribArray(texLoc);
-
-    const texBuffer = gl.createBuffer();
-
     const bayerTex = gl.createTexture();
-    gl.activeTexture(gl.TEXTURE1);
+    gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, bayerTex);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.LUMINANCE, 8, 8, 0, gl.LUMINANCE, gl.UNSIGNED_BYTE, bayerData);
-    gl.uniform1i(gl.getUniformLocation(program, 'u_bayer'), 1);
-
+    gl.uniform1i(gl.getUniformLocation(program, 'u_bayer'), 0);
     gl.uniform1i(gl.getUniformLocation(program, 'u_ditherMode'), ditherMode);
 
     const loc = {
-      image: gl.getUniformLocation(program, 'u_image'),
       resolution: gl.getUniformLocation(program, 'u_resolution'),
+      time: gl.getUniformLocation(program, 'u_time'),
+      dpr: gl.getUniformLocation(program, 'u_dpr'),
       isLight: gl.getUniformLocation(program, 'u_isLight'),
       flip: gl.getUniformLocation(program, 'u_flip'),
+      hover: gl.getUniformLocation(program, 'u_hover'),
       alphaFallback: gl.getUniformLocation(program, 'u_alphaFallback'),
       backgroundColor: gl.getUniformLocation(program, 'u_backgroundColor')
     };
     gl.uniform1f(loc.alphaFallback, alphaFallback ? 1.0 : 0.0);
     gl.uniform1f(loc.flip, flip ? 1.0 : 0.0);
 
-    gl.activeTexture(gl.TEXTURE0);
-    const texture = gl.createTexture();
-    gl.bindTexture(gl.TEXTURE_2D, texture);
-    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-    gl.uniform1i(loc.image, 0);
-
     return {
       canvas: canvas,
       gl: gl,
       loc: loc,
+      bayerTex: bayerTex,
       posBuffer: posBuffer,
       posLoc: posLoc,
-      texLoc: texLoc,
-      texBuffer: texBuffer,
-      texture: texture,
       alphaFallback: alphaFallback,
-      source: null,
+      hoverTarget: 0,
+      hoverValue: 0,
       needsResize: true,
       visible: true
     };
   }
 
-  function setupCanvas(effect, source) {
+  function setupCanvas(effect) {
     const gl = effect.gl;
-    const sourceWidth = source === video ? video.videoWidth : fallbackImage.naturalWidth;
-    const sourceHeight = source === video ? video.videoHeight : fallbackImage.naturalHeight;
-    if (!sourceWidth || !sourceHeight) return false;
-
     const dpr = window.devicePixelRatio || 1;
     const width = Math.max(1, Math.round(effect.canvas.offsetWidth * dpr));
     const height = Math.max(1, Math.round(effect.canvas.offsetHeight * dpr));
@@ -471,84 +509,46 @@
       effect.canvas.height = height;
     }
     gl.viewport(0, 0, width, height);
-
-    // Cover behavior: show the bottom of the source (crop the top).  The
-    // fragment shader mirrors Y in light mode / for the footer.
-    const canvasAspect = width / height;
-    const sourceAspect = sourceWidth / sourceHeight;
-    let texTop = 1, texBottom = 0, texLeft = 0, texRight = 1;
-    if (sourceAspect > canvasAspect) {
-      const scale = canvasAspect / sourceAspect;
-      texLeft = (1 - scale) / 2;
-      texRight = 1 - texLeft;
-    } else {
-      texTop = sourceAspect / canvasAspect;
-      texBottom = 0;
-    }
-
-    gl.bindBuffer(gl.ARRAY_BUFFER, effect.texBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
-      texLeft, texBottom,   texRight, texBottom,
-      texLeft, texTop,      texRight, texTop
-    ]), gl.STATIC_DRAW);
-
     gl.uniform2f(effect.loc.resolution, width, height);
-    effect.source = source;
-    return true;
+    gl.uniform1f(effect.loc.dpr, dpr);
+    effect.needsResize = false;
   }
 
-  function renderEffect(effect, source) {
+  function renderEffect(effect, time) {
     const gl = effect.gl;
-
     gl.bindBuffer(gl.ARRAY_BUFFER, effect.posBuffer);
     gl.vertexAttribPointer(effect.posLoc, 2, gl.FLOAT, false, 0, 0);
-    gl.bindBuffer(gl.ARRAY_BUFFER, effect.texBuffer);
-    gl.vertexAttribPointer(effect.texLoc, 2, gl.FLOAT, false, 0, 0);
-
     gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, effect.texture);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
-
+    gl.bindTexture(gl.TEXTURE_2D, effect.bayerTex);
+    gl.uniform1f(effect.loc.time, time);
     gl.uniform1f(effect.loc.isLight, window.darkThoughtsTheme.isLight() ? 1.0 : 0.0);
+    gl.uniform1f(effect.loc.hover, effect.hoverValue);
     if (effect.alphaFallback) {
       window.darkThoughtsShader.setBackgroundUniform(gl, effect.loc.backgroundColor, effect.canvas);
     }
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   }
 
-  function currentSource() {
-    // Prefer the video whenever it has a decodable frame - even while paused -
-    // so resuming from a hidden tab shows the video immediately instead of
-    // flashing the static poster.
-    if (video.readyState >= 2) return video;
-    if (fallbackReady) return fallbackImage;
-    return null;
-  }
-
   let effects = [];
   let lastFrameTime = 0;
   let lastDpr = window.devicePixelRatio;
+  let startTime = performance.now();
 
-  function drawEffect(effect) {
-    const source = currentSource();
-    if (!source) return;
-    if (effect.needsResize || effect.source !== source) {
-      if (!setupCanvas(effect, source)) return;
-      effect.needsResize = false;
-    }
-    renderEffect(effect, source);
+  function elapsed() {
+    return (performance.now() - startTime) / 1000;
   }
 
-  function drawVisibleEffects() {
-    for (const effect of effects) {
-      if (effect.visible) drawEffect(effect);
-    }
+  function drawEffectNow(effect) {
+    if (effect.needsResize) setupCanvas(effect);
+    renderEffect(effect, elapsed());
   }
 
   function frame(timestamp) {
     requestAnimationFrame(frame);
     if (document.hidden || effects.length === 0) return;
     if (timestamp - lastFrameTime < FRAME_INTERVAL) return;
+
+    const dt = lastFrameTime ? Math.min((timestamp - lastFrameTime) / 1000, 0.1) : 0;
     lastFrameTime = timestamp;
 
     const dpr = window.devicePixelRatio;
@@ -557,47 +557,21 @@
       for (const effect of effects) effect.needsResize = true;
     }
 
-    drawVisibleEffects();
-  }
+    const time = elapsed();
 
-  let themeRepaintId = null;
-  function repaintWhileStatic() {
-    if (themeRepaintId) cancelAnimationFrame(themeRepaintId);
-    const started = performance.now();
-    function repaint() {
-      const source = currentSource();
-      if (videoPlaying || !source) {
-        themeRepaintId = null;
-        return;
+    for (const effect of effects) {
+      // Animate hover linearly (~2.65s for the staggered blobs).
+      const hoverSpeed = dt / 2.65;
+      if (effect.hoverTarget > effect.hoverValue) {
+        effect.hoverValue = Math.min(effect.hoverTarget, effect.hoverValue + hoverSpeed);
+      } else if (effect.hoverTarget < effect.hoverValue) {
+        effect.hoverValue = Math.max(effect.hoverTarget, effect.hoverValue - hoverSpeed);
       }
-      for (const effect of effects) {
-        if (effect.visible) renderEffect(effect, source);
-      }
-      if (performance.now() - started < 350) {
-        themeRepaintId = requestAnimationFrame(repaint);
-      } else {
-        themeRepaintId = null;
-      }
+
+      if (!effect.visible) continue;
+      if (effect.needsResize) setupCanvas(effect);
+      renderEffect(effect, time);
     }
-    themeRepaintId = requestAnimationFrame(repaint);
-  }
-
-  function tryPlayVideo() {
-    // Don't short-circuit on the `videoPlaying` flag: it goes stale when the
-    // browser pauses the video (e.g. on tab switch) and would stop us from
-    // ever calling play() again.
-    if (REDUCED_MOTION || !video.paused) return;
-    video.play().catch(function() {
-      // Autoplay blocked - retry on first user interaction.
-    });
-  }
-
-  function onFirstInteraction() {
-    tryPlayVideo();
-    document.removeEventListener('click', onFirstInteraction);
-    document.removeEventListener('touchstart', onFirstInteraction);
-    document.removeEventListener('keydown', onFirstInteraction);
-    document.removeEventListener('scroll', onFirstInteraction);
   }
 
   function init() {
@@ -614,48 +588,27 @@
           if (effect.canvas === entry.target) {
             effect.visible = entry.isIntersecting;
             // Repaint immediately so scrolling back does not flash an empty canvas.
-            if (effect.visible) drawEffect(effect);
+            if (effect.visible) drawEffectNow(effect);
           }
         }
       }
     }, { threshold: 0 });
-    for (const effect of effects) observer.observe(effect.canvas);
+
+    for (const effect of effects) {
+      observer.observe(effect.canvas);
+
+      const container = effect.canvas.parentElement;
+      if (container) {
+        container.addEventListener('mouseenter', function() { effect.hoverTarget = 1; });
+        container.addEventListener('mouseleave', function() { effect.hoverTarget = 0; });
+      }
+    }
 
     window.addEventListener('resize', function() {
       for (const effect of effects) effect.needsResize = true;
     });
 
-    document.addEventListener('visibilitychange', function() {
-      if (document.hidden) {
-        video.pause();
-      } else {
-        tryPlayVideo();
-        drawVisibleEffects();
-      }
-    });
-
-    fallbackImage.addEventListener('load', function() {
-      fallbackReady = true;
-      for (const effect of effects) effect.needsResize = true;
-    });
-
-    video.addEventListener('loadeddata', tryPlayVideo);
-    video.addEventListener('playing', function() {
-      videoPlaying = true;
-      for (const effect of effects) effect.needsResize = true;
-    });
-    video.addEventListener('pause', function() {
-      videoPlaying = false;
-    });
-
-    document.addEventListener('click', onFirstInteraction);
-    document.addEventListener('touchstart', onFirstInteraction);
-    document.addEventListener('keydown', onFirstInteraction);
-    document.addEventListener('scroll', onFirstInteraction);
-
-    window.darkThoughtsTheme.onChange(repaintWhileStatic);
-
-    tryPlayVideo();
+    startTime = performance.now();
     requestAnimationFrame(frame);
   }
 
